@@ -8,6 +8,7 @@ typedef struct Node
   struct Node* previor;
 }NodeDef,*pNodeDef;
 
+extern osMessageQId myQueue01Handle;
 /*
 void DopplerPinDown(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin,)
 * 变量范围:
@@ -52,9 +53,11 @@ void DopplerPinUp(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin)
 {
   HAL_GPIO_WritePin(GPIOx,GPIO_Pin,GPIO_PIN_SET);
 }
-void DopplerEnergyFlashing(uint8_t level)
+
+//多普勒能量灯闪烁控制函数
+void DopplerEnergyFlashing(uint32_t level)
 {
-  static uint16_t FlashingInterval = 0;
+  static uint32_t FlashingInterval = 0;
   static uint8_t FlashingFlag = 0;
   if(FlashingInterval >= level)
   {
@@ -72,6 +75,7 @@ void DopplerEnergyFlashing(uint8_t level)
   }
   FlashingInterval++;
 }
+//添加最大值和最小值链表，将ADC采集数据的前十个建立链表
 void FillLinkList(pNodeDef HeadNode,uint32_t* buffer)
 {
   pNodeDef pNode_1 = pvPortMalloc(sizeof(NodeDef));
@@ -101,13 +105,15 @@ void FillLinkList(pNodeDef HeadNode,uint32_t* buffer)
     }
   }
 }
-//升序插入
+//插入法和冒泡法将前十个数据进行排序
 void InsertSort(pNodeDef HeadNode,bool8 IsAscendingSort)
 {
   pNodeDef pNode_1 = NULL;
   pNodeDef pNode_2 = NULL;
   pNodeDef pNode_3 = NULL;
   pNodeDef pNode_4 = NULL;
+  uint8_t linklistlength = 0;
+  uint8_t CompareCounter = 0;
   
   if(IsAscendingSort == TRUE)
   {
@@ -137,7 +143,29 @@ void InsertSort(pNodeDef HeadNode,bool8 IsAscendingSort)
       pNode_2 = pNode_2->next;
     }
   }
+  else if(IsAscendingSort == FALSE)
+  {
+    //bubbling sort
+    for(linklistlength = 0;linklistlength < 9;linklistlength++)
+    {
+      pNode_1 = HeadNode->next;
+      pNode_2 = pNode_1->next;
+      for(CompareCounter = 0;CompareCounter < 9 - linklistlength;CompareCounter++)
+      {
+        if(pNode_1->value < pNode_2->value)
+        {
+          HeadNode->value = pNode_2->value;
+          pNode_2->value = pNode_1->value;
+          pNode_1->value = HeadNode->value;
+        }
+        pNode_1 = pNode_1->next;
+        pNode_2 = pNode_2->next;
+      }
+    }
+    
+  }
 }
+//free掉用于链表申请的内存
 void LinkListFree(pNodeDef HeadNode)
 {
   pNodeDef pNode_1 = NULL;
@@ -155,6 +183,7 @@ void LinkListFree(pNodeDef HeadNode)
   }
   vPortFree(HeadNode);
 }
+//筛选出ADC采集周期所有数据中的最大值或最小值
 void Filtrate(pNodeDef HeadNode,uint32_t *Buffer,
               uint32_t FiltrateLength,uint32_t StartIndex,bool8 IsMinimun)
 {
@@ -204,46 +233,133 @@ void Filtrate(pNodeDef HeadNode,uint32_t *Buffer,
       }
     }
   }
-}
-uint32_t bufferTest[20] = {0};
-//传感器采集数据分析处理
-void SensorDataHandle()
-{  
-  pNodeDef pNode_1 = NULL;
-
-  int32_t i = 0;
-  pNodeDef FrontMin = pvPortMalloc(sizeof(NodeDef));
-  uint32_t HeapFreeSize = 0;
-  
-  FrontMin->next = NULL;
-  FrontMin->previor = NULL;
- 
-  FillLinkList(FrontMin,SensorResultDMA);
-  HeapFreeSize = xPortGetFreeHeapSize();
-  //插入排序法
-  InsertSort(FrontMin,TRUE);
-  HeapFreeSize = xPortGetFreeHeapSize();
-  //筛选
-  Filtrate(FrontMin,SensorResultDMA,DMA_BUFF_SIZE,10,TRUE);
-  HeapFreeSize = xPortGetFreeHeapSize();
-  pNode_1 = FrontMin->next;
-  while(pNode_1 != FrontMin)
+  else  if(IsMinimun == FALSE)
   {
-    bufferTest[i] = pNode_1->value;
+    for(i = StartIndex;i < FiltrateLength; i++)
+    {
+      pNodeData = pvPortMalloc(sizeof(NodeDef));
+      pNodeData->value = Buffer[i];
+      pNode_1 = HeadNode;
+      pNode_2 = pNode_1->next;
+      IsInsert = FALSE;
+      while(pNode_2 != HeadNode)
+      {
+        if(pNodeData->value > pNode_2->value)
+        {
+          pNode_1->next = pNodeData;
+          pNodeData->previor = pNode_1;
+          pNodeData->next = pNode_2;
+          pNode_2->previor = pNodeData;
+          pNode_3 = HeadNode->previor;
+          pNode_4 = pNode_3->previor;
+          pNode_4->next = HeadNode;
+          HeadNode->previor = pNode_4;
+          //数据插入链表，将末尾表项free掉
+          vPortFree(pNode_3);
+          IsInsert = TRUE;
+          break;
+        }
+        else
+        {
+          pNode_1 = pNode_1->next;
+          pNode_2 = pNode_2->next;
+        }
+      }
+      //没有插入链表，将节点free掉
+      if(IsInsert == FALSE)
+      {
+        vPortFree(pNodeData);
+      }
+    }
+  }
+}
+//链表数据平均值计算
+float LinkListAverageValueGet(pNodeDef HeadNode)
+{
+  pNodeDef pNode_1 = NULL;
+  float average = 0,i = 0;
+  
+  pNode_1 = HeadNode->next;
+  while(pNode_1 != HeadNode)
+  {
+    average += (float)pNode_1->value;
     i++;
     pNode_1 = pNode_1->next;
   }
+  average /= i;
+  return average;
+}
+//传感器采集数据分析处理
+float SensorDataHandle()
+{  
+  float AverageMax = 0;
+  float AverageMin = 0;
+  float energy = 0;
+  pNodeDef FrontMin = pvPortMalloc(sizeof(NodeDef));
+  pNodeDef FrontMax = pvPortMalloc(sizeof(NodeDef));
+  
+  FrontMin->next = NULL;
+  FrontMin->previor = NULL;
+  
+  FillLinkList(FrontMin,SensorResultDMA);
+  FillLinkList(FrontMax,SensorResultDMA);
+  //插入排序法
+  InsertSort(FrontMin,TRUE);
+  InsertSort(FrontMax,FALSE);
+  //筛选
+  Filtrate(FrontMin,SensorResultDMA,DMA_BUFF_SIZE,10,TRUE);
+  Filtrate(FrontMax,SensorResultDMA,DMA_BUFF_SIZE,10,FALSE);
+  //计算平均值
+  AverageMax = LinkListAverageValueGet(FrontMax);
+  AverageMin = LinkListAverageValueGet(FrontMin);
+  energy = AverageMax - AverageMin;
   //归还内存
   LinkListFree(FrontMin);
-  
-  HeapFreeSize = xPortGetFreeHeapSize();
-  if(HeapFreeSize == 5096)
-  {
-    HeapFreeSize = xPortGetFreeHeapSize();
-  }
+  LinkListFree(FrontMax);
+  return energy;
 }
-
-
+//LED闪烁频率获取函数
+uint32_t LedFlashingFrequencyGet(uint32_t Energy)
+{
+  uint32_t value = 0;
+  if(Energy < 100)
+  {
+    value = 300;
+  }
+  else if((Energy >= 100)&&(Energy < 500))
+  {
+    value = 240;
+  }
+  else if((Energy >= 1000)&&(Energy < 1500))
+  {
+    value = 200;
+  }
+  else if((Energy >= 1500)&&(Energy < 2000))
+  {
+    value = 160;
+  }
+  else if((Energy >= 2000)&&(Energy < 2500))
+  {
+    value = 120;
+  }
+  else if((Energy >= 2500)&&(Energy < 3000))
+  {
+    value = 100;
+  }
+  else if((Energy >= 3000)&&(Energy < 3500))
+  {
+    value = 80;
+  }
+  else if((Energy >= 3500)&&(Energy < 4000))
+  {
+    value = 60;
+  }
+  else
+  {
+    value = 40;
+  }
+  return value;
+}
 
 
 
