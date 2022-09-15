@@ -57,12 +57,28 @@ typedef enum
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
-
+extern void HardFedDog(uint8_t* FedDog);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define RELAY_CP_Pin GPIO_PIN_2
+#define RELAY_CP_GPIO_Port GPIOE
+#define RELAY_Q_Pin GPIO_PIN_3
+#define RELAY_Q_GPIO_Port GPIOE
 #define SIGNAL_Pin GPIO_PIN_6
 #define SIGNAL_GPIO_Port GPIOA
+#define SENSV_Pin GPIO_PIN_4
+#define SENSV_GPIO_Port GPIOC
+#define DELAY_Pin GPIO_PIN_5
+#define DELAY_GPIO_Port GPIOC
+#define SVTY_Pin GPIO_PIN_0
+#define SVTY_GPIO_Port GPIOB
+#define EEPROM_SCL_Pin GPIO_PIN_13
+#define EEPROM_SCL_GPIO_Port GPIOB
+#define EEPROM_SDA_Pin GPIO_PIN_14
+#define EEPROM_SDA_GPIO_Port GPIOB
+#define RELAY_CTRL_Pin GPIO_PIN_15
+#define RELAY_CTRL_GPIO_Port GPIOA
 #define RELAY_LED_Pin GPIO_PIN_3
 #define RELAY_LED_GPIO_Port GPIOD
 #define POWER_LED_Pin GPIO_PIN_4
@@ -71,13 +87,12 @@ void Error_Handler(void);
 #define SIGNAL_LED_GPIO_Port GPIOD
 #define WDI_Pin GPIO_PIN_4
 #define WDI_GPIO_Port GPIOB
+#define LCD_SCL_Pin GPIO_PIN_6
+#define LCD_SCL_GPIO_Port GPIOB
+#define LCD_SDA_Pin GPIO_PIN_7
+#define LCD_SDA_GPIO_Port GPIOB
 /* USER CODE BEGIN Private defines */
-typedef enum 
-{
-  FLOW_STATE_LOAD,
-  NO_FLOW_STATE_LOAD,
-  SENSOR_ABNORMAL,
-}SystemStateMachineDef;
+
 #define DMA_BUFF_SIZE                   625
 extern uint32_t     SensorResultDMA[DMA_BUFF_SIZE];
 
